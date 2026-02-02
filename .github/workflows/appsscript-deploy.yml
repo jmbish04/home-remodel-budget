@@ -1,56 +1,22 @@
-name: Deploy Apps Script
-
+name: Deploy Script
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'appsscript/**'
-      - '.github/workflows/appsscript-deploy.yml'
-  workflow_dispatch:
-
+    branches: [ main ]
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install dependencies
-        working-directory: ./appsscript
-        run: npm install
-
-      - name: Create Auth Files
-        shell: bash
+      - name: Install clasp
+        run: npm install -g @google/clasp
+      - name: Create clasprc.json
+        run: echo "$CLASPRC_JSON" > ~/.clasprc.json
         env:
-          CLASP_CONFIG: ${{ secrets.CLASP_JSON }}
-          CLASPRC_CONFIG: ${{ secrets.CLASPRC_JSON }}
-        run: |
-          # Write .clasp.json to the project directory
-          echo "$CLASP_CONFIG" > ./appsscript/.clasp.json
-          
-          # Write .clasprc.json to the runner's home directory
-          # This is where clasp looks by default
-          echo "$CLASPRC_CONFIG" > "$HOME/.clasprc.json"
-          
-          # Also write a local copy just in case
-          echo "$CLASPRC_CONFIG" > ./appsscript/.clasprc.json
-
-      - name: Push to Apps Script
-        working-directory: ./appsscript
-        env:
-          # This environment variable tells clasp exactly where the auth is
-          CLASP_CONFIG_AUTH: "$HOME/.clasprc.json"
-        run: npx @google/clasp push -f
-
-      - name: Deploy Apps Script
-        working-directory: ./appsscript
-        env:
-          CLASP_CONFIG_AUTH: "$HOME/.clasprc.json"
-        run: npx @google/clasp deploy
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      - name: Push to Google Apps Script
+        run: clasp push -f
