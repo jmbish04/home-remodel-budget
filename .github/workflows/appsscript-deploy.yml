@@ -12,8 +12,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout code
@@ -34,16 +32,25 @@ jobs:
           CLASP_CONFIG: ${{ secrets.CLASP_JSON }}
           CLASPRC_CONFIG: ${{ secrets.CLASPRC_JSON }}
         run: |
-          # Write configuration files directly into the working directory
+          # Write .clasp.json to the project directory
           echo "$CLASP_CONFIG" > ./appsscript/.clasp.json
+          
+          # Write .clasprc.json to the runner's home directory
+          # This is where clasp looks by default
+          echo "$CLASPRC_CONFIG" > "$HOME/.clasprc.json"
+          
+          # Also write a local copy just in case
           echo "$CLASPRC_CONFIG" > ./appsscript/.clasprc.json
 
       - name: Push to Apps Script
         working-directory: ./appsscript
-        # We use --auth to point directly to the file we just created
-        run: npx @google/clasp push -f --auth ./.clasprc.json
+        env:
+          # This environment variable tells clasp exactly where the auth is
+          CLASP_CONFIG_AUTH: "$HOME/.clasprc.json"
+        run: npx @google/clasp push -f
 
       - name: Deploy Apps Script
         working-directory: ./appsscript
-        # This creates a new deployment version on Google's side
-        run: npx @google/clasp deploy --auth ./.clasprc.json
+        env:
+          CLASP_CONFIG_AUTH: "$HOME/.clasprc.json"
+        run: npx @google/clasp deploy
