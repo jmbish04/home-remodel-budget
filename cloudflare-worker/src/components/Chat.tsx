@@ -39,7 +39,7 @@ export function Chat({ apiEndpoint = '/api/chat' }: ChatProps) {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: input.trim(),
       timestamp: new Date(),
