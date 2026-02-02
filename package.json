@@ -1,0 +1,14 @@
+{
+  "name": "home-remodel-budget",
+  "private": true,
+  "scripts": {
+    "deploy:worker": "pnpm --filter cloudflare-worker run deploy",
+    "deploy:appsscript": "pnpm --filter appsscript run push",
+    "dev:worker": "pnpm --filter cloudflare-worker run dev",
+    "build:worker": "pnpm --filter cloudflare-worker run build",
+    "install:all": "pnpm install"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
