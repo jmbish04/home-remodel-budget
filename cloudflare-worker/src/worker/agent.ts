@@ -20,9 +20,16 @@ import {
 // Use the generated Env type from worker-configuration.d.ts
 // The global Env interface is defined in worker-configuration.d.ts
 
+// AI Model configuration - extracted to constants for maintainability
+const AI_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const AI_API_BASE = 'https://api.cloudflare.com/client/v4/accounts/ai/run';
+const AI_API_ENDPOINT = `${AI_API_BASE}/${AI_MODEL}`;
+const DEFAULT_MAX_TOKENS = 2048;
+
 interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  tool_call_id?: string;
 }
 
 interface ToolCall {
@@ -103,23 +110,13 @@ async function runAgentConversation(
   gitConfig: GitToolsConfig
 ): Promise<string> {
   // Prepare messages with system prompt
-  const fullMessages = [
-    { role: 'system' as const, content: SYSTEM_PROMPT },
+  const fullMessages: ChatMessage[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
     ...messages,
   ];
 
   // Call the AI with tools
-  const aiResponse = await env.AI.fetch('https://api.cloudflare.com/client/v4/accounts/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messages: fullMessages,
-      tools: agentTools,
-      max_tokens: 2048,
-    }),
-  });
+  const aiResponse = await callAI(env, fullMessages, true);
 
   if (!aiResponse.ok) {
     throw new Error(`AI API error: ${aiResponse.status}`);
@@ -134,32 +131,28 @@ async function runAgentConversation(
 
   // Check if there are tool calls to execute
   if (aiResult.result?.tool_calls && aiResult.result.tool_calls.length > 0) {
-    const toolResults: string[] = [];
+    const toolResultMessages: ChatMessage[] = [];
     
     for (const toolCall of aiResult.result.tool_calls) {
       const result = await executeToolCall(sandbox, toolCall, gitConfig);
-      toolResults.push(`Tool ${toolCall.function.name}: ${result}`);
+      // Add tool result as a tool message (proper format for tool results)
+      toolResultMessages.push({
+        role: 'tool',
+        content: result,
+        tool_call_id: toolCall.id,
+      });
     }
 
-    // Make another call with tool results
-    const followUpMessages = [
+    // Build follow-up messages with tool results as system context
+    const followUpMessages: ChatMessage[] = [
       ...fullMessages,
       {
-        role: 'assistant' as const,
-        content: `I executed the following tools:\n${toolResults.join('\n')}\n\nLet me summarize the results for you.`,
+        role: 'system',
+        content: `Tool execution results:\n${toolResultMessages.map(m => m.content).join('\n\n')}\n\nPlease summarize these results for the user.`,
       },
     ];
 
-    const followUpResponse = await env.AI.fetch('https://api.cloudflare.com/client/v4/accounts/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages: followUpMessages,
-        max_tokens: 2048,
-      }),
-    });
+    const followUpResponse = await callAI(env, followUpMessages, false);
 
     const followUpResult = await followUpResponse.json() as {
       result?: { response?: string };
@@ -169,6 +162,33 @@ async function runAgentConversation(
   }
 
   return aiResult.result?.response || 'I apologize, but I could not generate a response.';
+}
+
+/**
+ * Helper function to call the AI API
+ * Centralizes the API call logic for consistency and maintainability
+ */
+async function callAI(
+  env: Env,
+  messages: ChatMessage[],
+  includeTools: boolean
+): Promise<Response> {
+  const requestBody: Record<string, unknown> = {
+    messages,
+    max_tokens: DEFAULT_MAX_TOKENS,
+  };
+
+  if (includeTools) {
+    requestBody.tools = agentTools;
+  }
+
+  return env.AI.fetch(AI_API_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
 }
 
 async function executeToolCall(
