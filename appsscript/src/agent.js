@@ -114,7 +114,7 @@ function handleAgentChat(userMessage, clientHistoryJSON) {
     currentIteration++;
 
     var payload = {
-      model: "gpt-4o", // Can be targeted to specific models upstream via Cloudflare AI Gateway fallbacks
+      model: "google-ai-studio/gemini-3.1-flash", // Can be targeted to specific models upstream via Cloudflare AI Gateway fallbacks
       messages: messages,
       tools: tools,
       tool_choice: "auto",
@@ -124,7 +124,7 @@ function handleAgentChat(userMessage, clientHistoryJSON) {
     var options = {
       method: "post",
       contentType: "application/json",
-      headers: { "Authorization": "Bearer " + apiKey },
+      headers: { "cf-aig-authorization": "Bearer " + apiKey },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     };
